@@ -90,8 +90,10 @@ public class Boot extends MclModule {
                     } else {
                         files.add(pkg.getJarFile());
                     }
+
                     pkgMap.put(pkg.id, pkg.version);
                 }
+
                 if (pkg.type.equals(MclPackage.TYPE_PLUGIN)) {
                     var metadata = pkg.getMetadataFile();
                     if (metadata.exists()) {

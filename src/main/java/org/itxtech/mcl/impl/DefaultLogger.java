@@ -61,8 +61,6 @@ public class DefaultLogger implements Logger {
 
     @Override
     public void logException(Object e) {
-        Object oe = e;
-        if (e == null) e = oe;
         if (e instanceof Throwable) {
             error(getExceptionMessage((Throwable) e));
         } else {
@@ -82,7 +80,7 @@ public class DefaultLogger implements Logger {
         if (level < logLevel) {
             return;
         }
-        var ansi = Ansi.ansi().a(" ");
+        var ansi = Ansi.ansi();
         String prefix;
         var date = new SimpleDateFormat("HH:mm:ss").format(new Date());
         switch (level) {
@@ -104,7 +102,8 @@ public class DefaultLogger implements Logger {
                 prefix = "INFO";
                 break;
         }
-        ansi.a(" ").a(date).a(" [").a(prefix).a("] ");
+
+        ansi.a(date).a(" [").a(prefix).a("] ");
         if (level == LOG_INFO) ansi.reset();
         ansi.a(info);
         ansi.reset();

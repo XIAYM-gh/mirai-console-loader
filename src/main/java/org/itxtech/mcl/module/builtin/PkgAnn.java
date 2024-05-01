@@ -3,6 +3,8 @@ package org.itxtech.mcl.module.builtin;
 import org.fusesource.jansi.Ansi;
 import org.itxtech.mcl.module.MclModule;
 
+import java.util.concurrent.Executors;
+
 /*
  *
  * Mirai Console Loader
@@ -34,17 +36,21 @@ public class PkgAnn extends MclModule {
 
     @Override
     public void load() {
-        for (var pkg : loader.packageManager.getPackages()) {
-            try {
-                if (!pkg.channel.startsWith("maven")) {
-                    var info = loader.repo.fetchPackage(pkg.id);
-                    if (info.announcement != null) {
-                        loader.logger.info(Ansi.ansi().fgBrightYellow().a(info.getName(pkg.id)).reset().a(" Announcement:"));
-                        loader.logger.println(info.announcement);
+        try (var exec = Executors.newFixedThreadPool(4)) {
+            for (var pkg : loader.packageManager.getPackages()) {
+                exec.submit(() -> {
+                    try {
+                        if (!pkg.channel.startsWith("maven")) {
+                            var info = loader.repo.fetchPackage(pkg.id);
+                            if (info.announcement != null) {
+                                loader.logger.info(Ansi.ansi().fgBrightYellow().a(info.getName(pkg.id)).reset().a(" Announcement:"));
+                                loader.logger.println(info.announcement);
+                            }
+                        }
+                    } catch (Exception e) {
+                        loader.logger.error("Failed to fetch announcement for \"" + pkg.id + "\"");
                     }
-                }
-            } catch (Exception e) {
-                loader.logger.error("Failed to fetch announcement for \"" + pkg.id + "\"");
+                });
             }
         }
     }

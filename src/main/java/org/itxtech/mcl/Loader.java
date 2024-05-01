@@ -164,6 +164,10 @@ public class Loader {
      * 启动 Mirai Console Loader，并加载脚本
      */
     public void start(String[] args) throws Exception {
+        logger.warning("*** FOR PERSONAL USE ONLY ***");
+        logger.warning("!!! Please don't distribute this edition of MCL !!!");
+        logger.info("For first use, please delete the libs folder.\n");
+
         logger.info(Ansi.ansi().fgBrightCyan().a("iTX Technologies Mirai Console Loader").reset()
                 .a(" version ").fgBrightYellow().a(getVersion()));
         logger.info(Ansi.ansi().a("Runtime: ").fgBrightCyan().a(System.getProperty("java.vm.name")).a(" ")

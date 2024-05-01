@@ -33,13 +33,6 @@ public class Announcement extends MclModule {
 
     @Override
     public void load() {
-        loader.logger.debug("Fetching MCL Announcement...");
-        try {
-            var pkg = loader.repo.fetchPackage("org.itxtech:mcl");
-            loader.logger.info("Mirai Console Loader Announcement:");
-            loader.logger.println(pkg.announcement);
-        } catch (Exception e) {
-            loader.logger.error("Failed to fetch MCL announcement.");
-        }
+        loader.logger.info("MCL Announcement 获取个集贸啊，跳了。");
     }
 }

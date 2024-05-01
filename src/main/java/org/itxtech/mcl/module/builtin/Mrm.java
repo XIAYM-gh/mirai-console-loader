@@ -33,7 +33,7 @@ public class Mrm extends MclModule {
 
     // Mirai Repo Manager
 
-    static class Repo {
+    public static class Repo {
         public String url;
         public String desc;
 

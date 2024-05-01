@@ -45,7 +45,7 @@ public class MclPackage {
     public static final String CHAN_NIGHTLY = "nightly";
 
     public static String getType(String t) {
-        if (t == null || "".equals(t)) {
+        if (t == null || t.isEmpty()) {
             return TYPE_PLUGIN;
         }
         var alias = TYPE_ALIAS.get(t);

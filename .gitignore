@@ -4,8 +4,3 @@ build
 out
 
 /testing
-
-
-/gradle
-gradlew
-gradlew.bat

@@ -82,8 +82,9 @@ public class Utility {
         for (var file : files) {
             Agent.appendJarFile(new JarFile(file));
         }
+
         var method = getMain.run();
-        method.invoke(null, (Object) (args.trim().equals("") ? new String[0] : args.split(" ")));
+        method.invoke(null, (Object) (args.trim().isEmpty() ? new String[0] : args.split(" ")));
     }
 
     public static void bootMirai(ArrayList<File> files, String entry, String args) throws Exception {
@@ -96,21 +97,6 @@ public class Utility {
         f.delete(f.length() - 2, f.length());
         Loader.getInstance().logger.debug("Boot Mirai Files: " + f + "; Args: \"" + args + "\"");
         bootJars(arr.toArray(new File[0]), entry, args);
-    }
-
-    public static String humanReadableFileSize(int bytes) {
-        var absB = bytes == Integer.MIN_VALUE ? Integer.MAX_VALUE : Math.abs(bytes);
-        if (absB < 1024) {
-            return bytes + " B";
-        }
-        var value = absB;
-        var ci = new StringCharacterIterator("KMGTPE");
-        for (var i = 40; i >= 0 && absB > 0xfffccccccccccccL >> i; i -= 10) {
-            value >>= 10;
-            ci.next();
-        }
-        value *= Integer.signum(bytes);
-        return String.format("%.2f %cB", value / 1024.0, ci.current());
     }
 
     public static String join(String d, List<String> t) {

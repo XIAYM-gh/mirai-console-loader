@@ -6,8 +6,13 @@ import org.itxtech.mcl.Utility;
 import org.itxtech.mcl.component.Repository;
 import org.itxtech.mcl.module.MclModule;
 import org.itxtech.mcl.pkg.MclPackage;
+import org.objectweb.asm.*;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 /*
  *
@@ -35,9 +40,6 @@ import java.io.File;
 public class Updater extends MclModule {
     private boolean showNotice = false;
 
-    private int size = 0;
-    private String ttl = "";
-
     @Override
     public String getName() {
         return "updater";
@@ -47,8 +49,6 @@ public class Updater extends MclModule {
     public void prepare() {
         loader.options.addOption(Option.builder("u").desc("Update packages")
                 .longOpt("update").build());
-        loader.options.addOption(Option.builder("k").desc("Disable progress bar")
-                .longOpt("disable-progress-bar").build());
 //        loader.options.addOption(Option.builder("q").desc("Remove outdated files while updating")
 //                .longOpt("delete").build());
     }
@@ -63,6 +63,7 @@ public class Updater extends MclModule {
                 loader.logger.logException(e);
             }
         }
+
         if (showNotice) {
             loader.logger.warning(Ansi.ansi()
                     .fgYellow()
@@ -73,41 +74,36 @@ public class Updater extends MclModule {
                     .a(" to update packages.")
             );
         }
+
+        loader.logger.info("Lib checks finished.");
     }
 
     public void check(MclPackage pack) throws Exception {
-        var baseInfo = Ansi.ansi()
-                .a("Verifying ")
-                .fgBrightYellow()
-                .a("\"").a(pack.id).a("\"");
-        if (!"".equals(pack.version)) {
-            baseInfo = baseInfo.reset().a(" v").fgBrightYellow().a(pack.version);
-        }
-        if (!"".equals(pack.channel)) {
-            baseInfo = baseInfo.reset().a(" from ").fgBrightYellow().a(pack.channel);
-        }
-        loader.logger.info(baseInfo);
         var update = loader.cli.hasOption("u");
         var force = pack.isVersionLocked();
         var down = false;
-        if (!Utility.checkLocalFile(pack)) {
+        if (!pack.getJarFile().exists()) {
             if (!"".equals(pack.version)) {
-                loader.logger.error("\"" + pack.id + "\" is corrupted.");
+                loader.logger.warning("Package \"" + pack.id + "\" doesn't exist.");
             }
+
             down = true;
         }
+
         var ver = "";
         Repository.PackageInfo info = null;
         if (pack.channel.startsWith("maven")) {
             ver = loader.repo.getLatestVersionFromMaven(pack.id, pack.channel);
         } else {
             info = loader.repo.fetchPackage(pack.id);
-            if (pack.type.equals("")) {
+            if (pack.type.isEmpty()) {
                 pack.type = MclPackage.getType(info.type);
             }
-            if (pack.channel.equals("")) {
+
+            if (pack.channel.isEmpty()) {
                 pack.channel = MclPackage.getChannel(info.defaultChannel);
             }
+
             if (!info.channels.containsKey(pack.channel)) {
                 loader.logger.error(Ansi.ansi()
                         .fgBrightRed()
@@ -117,13 +113,15 @@ public class Updater extends MclModule {
                         .a(" for package ")
                         .fgBrightYellow().a("\"").a(pack.id).a("\"")
                 );
+
                 loader.saveConfig();
                 return;
             }
+
             ver = info.getLatestVersion(pack.channel);
         }
 
-        if ((update && !pack.version.equals(ver) && !force) || pack.version.trim().equals("")) {
+        if ((update && !pack.version.equals(ver) && !force) || pack.version.trim().isEmpty()) {
 //            if (loader.cli.hasOption("q")) {
             pack.removeFiles();
 //            } else if (pack.type.equals(MclPackage.TYPE_PLUGIN)) {
@@ -133,6 +131,7 @@ public class Updater extends MclModule {
             pack.version = ver;
             down = true;
         }
+
         if (!down && !pack.version.equals(ver)) {
             loader.logger.warning(Ansi.ansi()
                     .fgBrightRed()
@@ -141,8 +140,10 @@ public class Updater extends MclModule {
                     .reset().fgBrightRed().a(" has newer version ")
                     .reset().fgBrightYellow().a("\"").a(ver).a("\"")
             );
+
             showNotice = true;
         }
+
         if (down) {
             loader.logger.info(Ansi.ansi()
                     .a("Updating ")
@@ -150,19 +151,86 @@ public class Updater extends MclModule {
                     .a("\"").a(pack.id).a("\"").reset()
                     .a(" to v").fgBrightYellow().a(pack.version)
             );
+
             if (!Utility.checkLocalFile(pack)) {
                 downloadFile(pack, info);
             }
-            if (!Utility.checkLocalFile(pack)) {
+
+            var result = Utility.checkLocalFile(pack);
+            try {
+                Files.delete(pack.getSha1File().toPath());
+            } catch (IOException ignored) {
+                // Do nothing
+            }
+
+            if (!result) {
                 loader.logger.error(Ansi.ansi()
                         .fgBrightRed()
-                        .a("The local file ")
+                        .a("The library file ")
                         .fgBrightYellow().a("\"").a(pack.id).a("\"")
                         .fgBrightRed()
-                        .a(" is still corrupted, please check the network.")
+                        .a(" is still corrupted, please 重开 :(")
                 );
+
+                loader.saveConfig();
+                return;
+            }
+
+            if (pack.id.equals("net.mamoe:mirai-console")) {
+                loader.logger.info("[ASM] Patching mirai-console...");
+                try (var fs = FileSystems.newFileSystem(pack.getJarFile().toPath())) {
+                    Path fsPath = fs.getPath("/net/mamoe/mirai/console/enduserreadme/EndUserReadme.class");
+
+                    ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+                    ClassReader reader = new ClassReader(
+                            Files.readAllBytes(fsPath)
+                    );
+
+                    ClassVisitor visitor = new ClassVisitor(Opcodes.ASM9, writer) {
+                        @Override
+                        public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+                            MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+                            if (mv != null) {
+                                switch (name + descriptor) {
+                                    case "put(Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V",
+                                            "putAll(Ljava/lang/String;)V",
+                                            "putAll$flush(Ljava/util/List;Lnet/mamoe/mirai/console/enduserreadme/EndUserReadme;Lkotlin/jvm/internal/Ref$ObjectRef;)V"
+                                            -> {
+                                        loader.logger.info("[ASM] Processing method: " + name);
+
+                                        // Clear method body
+                                        Type type = Type.getType(descriptor);
+                                        Type[] argTypes = type.getArgumentTypes();
+
+                                        boolean isStatic = ((access & Opcodes.ACC_STATIC) != 0);
+                                        int localSize = isStatic ? 0 : 1;
+                                        for (Type argType : argTypes) {
+                                            localSize += argType.getSize();
+                                        }
+
+                                        mv.visitCode();
+                                        mv.visitInsn(Opcodes.RETURN);
+                                        mv.visitMaxs(type.getReturnType().getSize(), localSize);
+                                        mv.visitEnd();
+
+                                        return null;
+                                    }
+                                }
+                            }
+
+                            return mv;
+                        }
+                    };
+
+                    reader.accept(visitor, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                    Files.write(fsPath, writer.toByteArray());
+                } catch (Exception ex) {
+                    loader.logger.error("Patch failed!");
+                    loader.logger.error(ex);
+                }
             }
         }
+
         loader.saveConfig();
     }
 
@@ -181,6 +249,7 @@ public class Updater extends MclModule {
             );
             return;
         }
+
         var index = jarUrl.lastIndexOf(name);
         if (index != -1) {
             jar = jarUrl.substring(index);
@@ -192,47 +261,14 @@ public class Updater extends MclModule {
         down(sha1Url, new File(dir, sha1));
 
         var metadataUrl = loader.repo.getMetadataUrl(pack, info);
-        if (metadataUrl.isEmpty()) return;
+        if (metadataUrl.isEmpty()) {
+            return;
+        }
         down(metadataUrl, new File(dir, metadata));
     }
 
-    public String alignRight(String current, String total) {
-        var max = Math.max(current.length(), total.length());
-        return " ".repeat(max - current.length()) + current;
-    }
-
-    public String buildDownloadBar(int total, int current) {
-        var length = 30;
-        var bar = Math.floor((current / 1.0 / total) * length);
-        var buffer = new StringBuilder("[");
-        for (var i = 0; i < bar; i++) {
-            buffer.append('=');
-        }
-        if (bar < length) {
-            buffer.append('>');
-            for (var i = bar; i < length; i++) {
-                buffer.append(' ');
-            }
-        }
-        return buffer + "]";
-    }
-
     public void down(String url, File file) {
-        var name = file.getName();
-        size = 0;
-        ttl = "";
-        loader.downloader.download(url, file, loader.cli.hasOption("k") ? null : (total, current) -> {
-            ttl = Utility.humanReadableFileSize(total);
-            var cur = Utility.humanReadableFileSize(current);
-
-            var line = " Downloading " + name + " " + buildDownloadBar(total, current) + " " +
-                    (alignRight(cur, ttl) + " / " + ttl) + " (" + (Math.floor(current * 1000.0 / total) / 10) + "%)" + "   \r";
-            loader.logger.print(line);
-            size = line.length();
-        });
-        if (!loader.cli.hasOption("k")) {
-            loader.logger.print(" ".repeat(size) + '\r');
-        }
-        loader.logger.println(" Downloading " + name + " " + buildDownloadBar(1, 1) + " " + ttl);
+        loader.logger.info("Downloading quietly: " + file.getName());
+        loader.downloader.download(url, file);
     }
 }

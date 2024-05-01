@@ -37,7 +37,6 @@ public class OracleJdk extends MclModule {
     @Override
     public void prepare() {
         if (System.getProperty("java.vm.vendor").contains("Oracle")) {
-            var pkgs = loader.config.packages;
             if (!loader.packageManager.hasPackage(BC_ID)) {
                 var p = new MclPackage("org.bouncycastle:bcprov-jdk15on");
                 p.type = MclPackage.TYPE_CORE;

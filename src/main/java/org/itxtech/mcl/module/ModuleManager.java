@@ -101,7 +101,8 @@ public class ModuleManager {
                 loader.logger.logException(e);
             }
         });
-        if (modules.size() == 0) {
+
+        if (modules.isEmpty()) {
             loader.logger.warning("No module has been loaded. Exiting.");
         }
     }
